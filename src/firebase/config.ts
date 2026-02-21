@@ -4,12 +4,13 @@ import { getFirestore } from "firebase/firestore";
 
 // TODO: Replace with your actual Firebase project configuration
 const firebaseConfig = {
-    apiKey: "YOUR_API_KEY",
-    authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-    projectId: "YOUR_PROJECT_ID",
-    storageBucket: "YOUR_PROJECT_ID.appspot.com",
-    messagingSenderId: "YOUR_SENDER_ID",
-    appId: "YOUR_APP_ID"
+    apiKey: "AIzaSyC3dc7VwrT_1D855o0FuGox68sNolUWxh4",
+    authDomain: "lito-extension.firebaseapp.com",
+    projectId: "lito-extension",
+    storageBucket: "lito-extension.firebasestorage.app",
+    messagingSenderId: "288510893885",
+    appId: "1:288510893885:web:fc87f091092fe21399af54",
+    measurementId: "G-XJPTBB08FY"
 };
 
 const app = initializeApp(firebaseConfig);
