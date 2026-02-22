@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { Settings, LogOut, Check, Pencil, Plus, X, MessageSquare, Send, FileText, Mic, MicOff, Volume2 } from 'lucide-react';
+import { Settings, LogOut, Check, Pencil, Plus, X, MessageSquare, Send, FileText, Mic, MicOff, Volume2, Radio, StopCircle } from 'lucide-react';
+import { useMultimodalLive } from './hooks/useMultimodalLive';
 
 interface Skill {
     id: string;
@@ -49,6 +50,11 @@ const App: React.FC = () => {
     const [isListening, setIsListening] = useState(false);
     const [recognition, setRecognition] = useState<any>(null);
     const voiceSubmitRef = React.useRef<((text: string) => void) | null>(null);
+    const liveSystemInstruction = `あなたはエンジニアの強力なアシスタント「Lito」です。
+ユーザーのブラウザ画面をリアルタイムで解析し、ユーザーのスキル（${skills.map(s => s.name).join(', ')}）と目標単価（${preferences.targetRate}円）に基づいたアドバイスを、短く専門的な視点で呟いてください。
+ユーザーが案件を見ている間、気づいたこと（マッチ度、注意点、交渉の余地など）を随時教えてください。`;
+
+    const { isActive: isLiveActive, responses: liveResponses, startLive, stopLive, setResponses: setLiveResponses } = useMultimodalLive(preferences.geminiApiKey, liveSystemInstruction);
 
     useEffect(() => {
         // SpeechRecognitionの初期化
@@ -575,15 +581,52 @@ const App: React.FC = () => {
                         <div className="flex-grow border-t border-gray-200"></div>
                         <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold tracking-widest flex items-center gap-2">
                             <span className="relative flex h-2.5 w-2.5">
-                                {isAnalyzing ? (
+                                {isAnalyzing || isLiveActive ? (
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                                 ) : null}
-                                <span className={`${isAnalyzing ? 'bg-blue-500' : 'bg-gray-300'} relative inline-flex rounded-full h-2.5 w-2.5`}></span>
+                                <span className={`${isAnalyzing || isLiveActive ? 'bg-blue-500' : 'bg-gray-300'} relative inline-flex rounded-full h-2.5 w-2.5`}></span>
                             </span>
-                            {isAnalyzing ? "リアルタイム解析中..." : "解析準備完了"}
+                            {isLiveActive ? "LIVE ストリーミング中" : isAnalyzing ? "リアルタイム解析中..." : "解析準備完了"}
                         </span>
                         <div className="flex-grow border-t border-gray-200"></div>
                     </div>
+
+                    <div className="flex flex-col gap-2 mb-4">
+                        <button
+                            onClick={isLiveActive ? stopLive : startLive}
+                            className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md ${isLiveActive
+                                ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
+                                }`}
+                        >
+                            {isLiveActive ? (
+                                <>
+                                    <StopCircle size={18} />
+                                    ライブモードを停止
+                                </>
+                            ) : (
+                                <>
+                                    <Radio size={18} />
+                                    ライブ解析モードを開始
+                                </>
+                            )}
+                        </button>
+                    </div>
+
+                    {isLiveActive && liveResponses.length > 0 && (
+                        <div className="mb-6 space-y-3 animate-in fade-in duration-500">
+                            {[...liveResponses].reverse().slice(0, 3).map((text, i) => (
+                                <div key={i} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 p-1 opacity-20">
+                                        <Radio size={40} className="text-blue-500" />
+                                    </div>
+                                    <p className="text-sm leading-relaxed text-indigo-900 font-medium italic">
+                                        "{text}"
+                                    </p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
 
                     {analysisResults ? (
                         <div className="mt-2 space-y-3 animate-in slide-in-from-bottom-2 duration-300">

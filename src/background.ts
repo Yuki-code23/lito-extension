@@ -132,6 +132,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         handleChatRequest(message.profile, message.message, message.context).then(sendResponse);
         return true;
     }
+    if (message.type === "CAPTURE_FOR_LIVE") {
+        chrome.tabs.captureVisibleTab().then(screenshotUrl => {
+            sendResponse({ success: true, screenshotUrl });
+        }).catch(err => sendResponse({ success: false, error: err.message }));
+        return true;
+    }
 });
 
 /**
