@@ -58,17 +58,17 @@ export class MultimodalLiveClient {
     private sendSetup() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-        const setupMsg = {
+        const setupMsg: any = {
             setup: {
                 model: this.config.model,
-                generation_config: {
-                    response_modalities: ["text"] // 音声回答が必要な場合は "audio" を追加
+                generationConfig: {
+                    responseModalities: ["text"]
                 }
             }
         };
 
         if (this.config.systemInstruction) {
-            (setupMsg.setup as any).system_instruction = {
+            setupMsg.setup.systemInstruction = {
                 parts: [{ text: this.config.systemInstruction }]
             };
         }
@@ -80,9 +80,9 @@ export class MultimodalLiveClient {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
         const msg = {
-            realtime_input: {
-                media_chunks: [{
-                    mime_type: "image/jpeg",
+            realtimeInput: {
+                mediaChunks: [{
+                    mimeType: "image/jpeg",
                     data: base64Data
                 }]
             }
@@ -94,9 +94,9 @@ export class MultimodalLiveClient {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
         const msg = {
-            realtime_input: {
-                media_chunks: [{
-                    mime_type: "audio/pcm;rate=16000",
+            realtimeInput: {
+                mediaChunks: [{
+                    mimeType: "audio/pcm;rate=16000",
                     data: base64Audio
                 }]
             }
@@ -108,12 +108,12 @@ export class MultimodalLiveClient {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
         const msg = {
-            client_content: {
+            clientContent: {
                 turns: [{
                     role: "user",
                     parts: [{ text }]
                 }],
-                turn_complete: true
+                turnComplete: true
             }
         };
         this.ws.send(JSON.stringify(msg));

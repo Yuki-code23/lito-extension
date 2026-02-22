@@ -15,9 +15,9 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
 
     const onMessage = useCallback((data: any) => {
         console.log("WebSocket Message Received:", data);
-        if (data.server_content && data.server_content.model_turn) {
+        if (data.serverContent && data.serverContent.modelTurn) {
             setIsThinking(false);
-            const parts = data.server_content.model_turn.parts;
+            const parts = data.serverContent.modelTurn.parts;
             const text = parts.map((p: any) => p.text).join('');
             if (text) {
                 setResponses(prev => [...prev, text]);
