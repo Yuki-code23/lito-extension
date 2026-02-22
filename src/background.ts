@@ -13,16 +13,18 @@ async function startLogin() {
         const CLIENT_ID = "351204538325-ptgb6kpq97ki2n43jl5gfmfresdefd9n.apps.googleusercontent.com";
         const REDIRECT_URI = chrome.identity.getRedirectURL(); // https://<extension-id>.chromiumapp.org/
         const SCOPES = ["openid", "email", "profile"].join(" ");
+        const nonce = Math.random().toString(36).substring(2);
 
         const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
             `client_id=${CLIENT_ID}&` +
-            `response_type=token&` +
+            `response_type=id_token&` +
             `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
-            `scope=${encodeURIComponent(SCOPES)}`;
+            `scope=${encodeURIComponent(SCOPES)}&` +
+            `nonce=${nonce}`;
 
-        console.log("Starting launchWebAuthFlow with Redirect URI:", REDIRECT_URI);
+        console.log("Starting launchWebAuthFlow (id_token) with Redirect URI:", REDIRECT_URI);
 
-        const token = await new Promise<string>((resolve, reject) => {
+        const idToken = await new Promise<string>((resolve, reject) => {
             chrome.identity.launchWebAuthFlow({
                 url: authUrl,
                 interactive: true
@@ -35,22 +37,22 @@ async function startLogin() {
                     return reject(new Error("No redirect URL received"));
                 }
 
-                // URLからaccess_tokenを抽出
+                // URLからid_tokenを抽出
                 const url = new URL(redirectUrl.replace("#", "?")); // URLSearchParamsで扱いやすくするため # を ? に置換
                 const params = new URLSearchParams(url.search);
-                const accessToken = params.get("access_token");
+                const token = params.get("id_token");
 
-                if (!accessToken) {
-                    console.error("Access token not found in redirect URL:", redirectUrl);
-                    return reject(new Error("Access token not found"));
+                if (!token) {
+                    console.error("ID token not found in redirect URL:", redirectUrl);
+                    return reject(new Error("ID token not found"));
                 }
 
-                resolve(accessToken);
+                resolve(token);
             });
         });
 
-        // FirebaseのCredentialを作成
-        const credential = GoogleAuthProvider.credential(null, token);
+        // FirebaseのCredentialを作成 (取得したidTokenを使用)
+        const credential = GoogleAuthProvider.credential(idToken);
 
         // Firebaseにサインイン
         const userCredential = await signInWithCredential(auth, credential);
