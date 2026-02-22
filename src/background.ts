@@ -9,20 +9,43 @@ import { analyzePage, generateProposal, soliloquyChat } from "./background/analy
  */
 async function startLogin() {
     try {
-        // Chrome純正のIdentity APIでOAuth2トークンを取得
+        // Brave/Chrome共通で動作する launchWebAuthFlow を使用
+        const CLIENT_ID = "351204538325-ptgb6kpq97ki2n43jl5gfmfresdefd9n.apps.googleusercontent.com";
+        const REDIRECT_URI = chrome.identity.getRedirectURL(); // https://<extension-id>.chromiumapp.org/
+        const SCOPES = ["openid", "email", "profile"].join(" ");
+
+        const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+            `client_id=${CLIENT_ID}&` +
+            `response_type=token&` +
+            `redirect_uri=${encodeURIComponent(REDIRECT_URI)}&` +
+            `scope=${encodeURIComponent(SCOPES)}`;
+
+        console.log("Starting launchWebAuthFlow with Redirect URI:", REDIRECT_URI);
+
         const token = await new Promise<string>((resolve, reject) => {
-            console.log("Requesting auth token from chrome.identity...");
-            chrome.identity.getAuthToken({ interactive: true }, (tokenOrResult: any) => {
+            chrome.identity.launchWebAuthFlow({
+                url: authUrl,
+                interactive: true
+            }, (redirectUrl) => {
                 if (chrome.runtime.lastError) {
-                    console.error("chrome.identity.getAuthToken error:", chrome.runtime.lastError.message);
+                    console.error("launchWebAuthFlow error:", chrome.runtime.lastError.message);
                     return reject(new Error(chrome.runtime.lastError.message));
                 }
-                const token = typeof tokenOrResult === 'string' ? tokenOrResult : tokenOrResult?.token;
-                console.log("Auth token received (first 10 chars):", token?.substring(0, 10));
-                if (!token) {
-                    return reject(new Error("Failed to get auth token"));
+                if (!redirectUrl) {
+                    return reject(new Error("No redirect URL received"));
                 }
-                resolve(token);
+
+                // URLからaccess_tokenを抽出
+                const url = new URL(redirectUrl.replace("#", "?")); // URLSearchParamsで扱いやすくするため # を ? に置換
+                const params = new URLSearchParams(url.search);
+                const accessToken = params.get("access_token");
+
+                if (!accessToken) {
+                    console.error("Access token not found in redirect URL:", redirectUrl);
+                    return reject(new Error("Access token not found"));
+                }
+
+                resolve(accessToken);
             });
         });
 
