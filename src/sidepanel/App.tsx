@@ -48,22 +48,35 @@ const App: React.FC = () => {
     const [isChatting, setIsChatting] = useState(false);
     const [isListening, setIsListening] = useState(false);
     const [recognition, setRecognition] = useState<any>(null);
+    const voiceSubmitRef = React.useRef<((text: string) => void) | null>(null);
 
     useEffect(() => {
         // SpeechRecognitionの初期化
         const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
         if (SpeechRecognition) {
+            console.log("SpeechRecognition supported and initializing...");
             const rec = new SpeechRecognition();
             rec.lang = 'ja-JP';
             rec.continuous = false;
             rec.interimResults = false;
 
-            rec.onstart = () => setIsListening(true);
-            rec.onend = () => setIsListening(false);
+            rec.onstart = () => {
+                console.log("Speech recognition started");
+                setIsListening(true);
+            };
+            rec.onend = () => {
+                console.log("Speech recognition ended");
+                setIsListening(false);
+            };
+            rec.onerror = (event: any) => {
+                console.error("Speech recognition error:", event.error);
+                setIsListening(false);
+            };
             rec.onresult = (event: any) => {
                 const transcript = event.results[0][0].transcript;
-                if (transcript) {
-                    handleVoiceSubmit(transcript);
+                console.log("Speech recognition result:", transcript);
+                if (transcript && voiceSubmitRef.current) {
+                    voiceSubmitRef.current(transcript);
                 }
             };
             setRecognition(rec);
@@ -175,17 +188,26 @@ const App: React.FC = () => {
 
     const handleToggleMic = () => {
         if (!recognition) {
+            console.error("SpeechRecognition is not initialized or not supported");
             alert("このブラウザは音声認識に対応していません。");
             return;
         }
         if (isListening) {
+            console.log("Stopping speech recognition...");
             recognition.stop();
         } else {
-            recognition.start();
+            console.log("Starting speech recognition...");
+            try {
+                recognition.start();
+            } catch (e) {
+                console.error("Failed to start speech recognition:", e);
+                setIsListening(false);
+            }
         }
     };
 
     const handleVoiceSubmit = async (text: string) => {
+        console.log("Submitting voice text:", text);
         setChatMessages(prev => [...prev, { role: 'user', text }]);
         setIsChatting(true);
         try {
@@ -198,7 +220,7 @@ const App: React.FC = () => {
 
             if (response && response.success) {
                 setChatMessages(prev => [...prev, { role: 'assistant', text: response.reply }]);
-                speakOut(response.reply);
+                speakOut(response.reply); // 音声提出時のみ読み上げ
             }
         } catch (error) {
             console.error("Voice Chat failed:", error);
@@ -206,6 +228,11 @@ const App: React.FC = () => {
             setIsChatting(false);
         }
     };
+
+    // Refを常に最新の関数に更新してクロージャの問題を回避
+    useEffect(() => {
+        voiceSubmitRef.current = handleVoiceSubmit;
+    }, [preferences, skills, analysisResults, chatMessages]);
 
     const speakOut = (text: string) => {
         if (!window.speechSynthesis) return;
@@ -257,7 +284,7 @@ const App: React.FC = () => {
 
             if (response && response.success) {
                 setChatMessages(prev => [...prev, { role: 'assistant', text: response.reply }]);
-                speakOut(response.reply);
+                // テキスト入力時は読み上げをスキップ
             }
         } catch (error) {
             console.error("Chat failed:", error);
