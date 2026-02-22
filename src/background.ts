@@ -11,11 +11,14 @@ async function startLogin() {
     try {
         // Chrome純正のIdentity APIでOAuth2トークンを取得
         const token = await new Promise<string>((resolve, reject) => {
+            console.log("Requesting auth token from chrome.identity...");
             chrome.identity.getAuthToken({ interactive: true }, (tokenOrResult: any) => {
                 if (chrome.runtime.lastError) {
+                    console.error("chrome.identity.getAuthToken error:", chrome.runtime.lastError.message);
                     return reject(new Error(chrome.runtime.lastError.message));
                 }
                 const token = typeof tokenOrResult === 'string' ? tokenOrResult : tokenOrResult?.token;
+                console.log("Auth token received (first 10 chars):", token?.substring(0, 10));
                 if (!token) {
                     return reject(new Error("Failed to get auth token"));
                 }
