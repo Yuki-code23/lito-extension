@@ -41,6 +41,7 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
             clientRef.current = client;
             setIsActive(true);
 
+            let captureCount = 0;
             // リアルタイム画面キャプチャのループ開始 (例: 3秒おき)
             intervalRef.current = setInterval(async () => {
                 try {
@@ -53,6 +54,14 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
                             clientRef.current.sendImage(base64Data);
                             setLastCapturedAt(new Date());
                             setIsThinking(true);
+
+                            captureCount++;
+                            // 最初のキャプチャ時と、その後は15秒(5回)ごとにAIに応答を促す
+                            if (captureCount === 1) {
+                                clientRef.current.sendText("画面の共有を開始しました。今見えている画面について、私のスキルや目標単価を踏まえたパッと見の印象やアドバイスを短く教えてください。");
+                            } else if (captureCount % 5 === 0) {
+                                clientRef.current.sendText("画面に変化はありましたか？もし新しい気づきや、追記すべきアドバイスがあれば短く教えてください。特に重要な変化がなければ「特になし」とだけ答えてください。");
+                            }
                         }
                     });
                 } catch (e) {
@@ -84,10 +93,16 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
             setIsActive(true);
             setIsScanning(true);
             setScanProgress(0);
+            setResponses([]); // 古い結果をクリア
 
             chrome.runtime.sendMessage({ type: "START_AUTO_SCAN" }, (response) => {
                 setIsScanning(false);
                 setScanProgress(100);
+                setIsThinking(true);
+                // スキャン完了時に全体総括を要求する
+                if (clientRef.current) {
+                    clientRef.current.sendText("ページ全体のスクロールとキャプチャが完了しました。これらのすべての画面情報を踏まえて、この案件の「総合的なマッチ度」「魅力やメリット」「懸念点や交渉の余地」をプロフェッショナルな視点でまとめて教えてください。");
+                }
             });
         } catch (e) {
             console.error("Failed to connect to Live API for scanning:", e);
