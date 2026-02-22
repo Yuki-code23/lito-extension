@@ -10,7 +10,8 @@
         "activeTab",
         "storage",
         "offscreen",
-        "identity"
+        "identity",
+        "scripting"
     ],
     "oauth2": {
         "client_id": "351204538325-ptgb6kpq97ki2n43jl5gfmfresdefd9n.apps.googleusercontent.com",

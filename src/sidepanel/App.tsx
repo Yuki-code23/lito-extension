@@ -54,7 +54,7 @@ const App: React.FC = () => {
 ユーザーのブラウザ画面をリアルタイムで解析し、ユーザーのスキル（${skills.map(s => s.name).join(', ')}）と目標単価（${preferences.targetRate}円）に基づいたアドバイスを、短く専門的な視点で呟いてください。
 ユーザーが案件を見ている間、気づいたこと（マッチ度、注意点、交渉の余地など）を随時教えてください。`;
 
-    const { isActive: isLiveActive, responses: liveResponses, startLive, stopLive, setResponses: setLiveResponses } = useMultimodalLive(preferences.geminiApiKey, liveSystemInstruction);
+    const { isActive: isLiveActive, isScanning, scanProgress, responses: liveResponses, startLive, startScan, stopLive, setResponses: setLiveResponses, isCapturing, isThinking, lastCapturedAt } = useMultimodalLive(preferences.geminiApiKey, liveSystemInstruction);
 
     useEffect(() => {
         // SpeechRecognitionの初期化
@@ -581,39 +581,66 @@ const App: React.FC = () => {
                         <div className="flex-grow border-t border-gray-200"></div>
                         <span className="flex-shrink-0 mx-4 text-gray-400 text-xs font-bold tracking-widest flex items-center gap-2">
                             <span className="relative flex h-2.5 w-2.5">
-                                {isAnalyzing || isLiveActive ? (
+                                {isAnalyzing || isLiveActive || isScanning ? (
                                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
                                 ) : null}
-                                <span className={`${isAnalyzing || isLiveActive ? 'bg-blue-500' : 'bg-gray-300'} relative inline-flex rounded-full h-2.5 w-2.5`}></span>
+                                <span className={`${isAnalyzing || isLiveActive || isScanning ? 'bg-blue-500' : 'bg-gray-300'} relative inline-flex rounded-full h-2.5 w-2.5`}></span>
                             </span>
-                            {isLiveActive ? "LIVE ストリーミング中" : isAnalyzing ? "リアルタイム解析中..." : "解析準備完了"}
+                            {isScanning ? `全画面スキャン中... (${scanProgress}%)` : isLiveActive ? (isCapturing ? "画面をキャプチャ中..." : isThinking ? "AIが分析中..." : "LIVE ストリーミング中") : isAnalyzing ? "リアルタイム解析中..." : "解析準備完了"}
                         </span>
                         <div className="flex-grow border-t border-gray-200"></div>
                     </div>
 
                     <div className="flex flex-col gap-2 mb-4">
-                        <button
-                            onClick={isLiveActive ? stopLive : startLive}
-                            className={`w-full py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md ${isLiveActive
-                                ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
-                                : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
-                                }`}
-                        >
-                            {isLiveActive ? (
-                                <>
-                                    <StopCircle size={18} />
-                                    ライブモードを停止
-                                </>
-                            ) : (
-                                <>
-                                    <Radio size={18} />
-                                    ライブ解析モードを開始
-                                </>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={isLiveActive || isScanning ? stopLive : startLive}
+                                className={`flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md ${isLiveActive || isScanning
+                                    ? 'bg-red-50 text-red-600 border border-red-200 hover:bg-red-100'
+                                    : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100'
+                                    }`}
+                            >
+                                {isLiveActive || isScanning ? (
+                                    <>
+                                        <StopCircle size={18} />
+                                        停止
+                                    </>
+                                ) : (
+                                    <>
+                                        <Radio size={18} />
+                                        ライブモード
+                                    </>
+                                )}
+                            </button>
+                            {!(isLiveActive || isScanning) && (
+                                <button
+                                    onClick={startScan}
+                                    className="flex-1 py-3 px-4 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all shadow-md bg-green-600 text-white hover:bg-green-700 shadow-green-100"
+                                >
+                                    <FileText size={18} />
+                                    全画面スキャン
+                                </button>
                             )}
-                        </button>
+                        </div>
+
+                        {/* 進行度・更新時刻メタデータ */}
+                        {isScanning && (
+                            <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                                <div className="bg-blue-500 h-1.5 rounded-full transition-all duration-300" style={{ width: `${scanProgress}%` }}></div>
+                            </div>
+                        )}
+                        {lastCapturedAt && (isLiveActive || isScanning) && (
+                            <div className="text-center text-[10px] text-gray-400 w-full mt-1 flex justify-center items-center gap-1">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isCapturing ? "animate-pulse text-blue-500" : ""}>
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                </svg>
+                                最後の更新: {lastCapturedAt.toLocaleTimeString()}
+                            </div>
+                        )}
                     </div>
 
-                    {isLiveActive && liveResponses.length > 0 && (
+                    {(isLiveActive || isScanning) && liveResponses.length > 0 && (
                         <div className="mb-6 space-y-3 animate-in fade-in duration-500">
                             {[...liveResponses].reverse().slice(0, 3).map((text, i) => (
                                 <div key={i} className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100 shadow-sm relative overflow-hidden">

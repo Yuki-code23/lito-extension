@@ -138,7 +138,61 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }).catch(err => sendResponse({ success: false, error: err.message }));
         return true;
     }
+    if (message.type === "START_AUTO_SCAN") {
+        handleAutoScan().then(() => sendResponse({ success: true }));
+        return true;
+    }
 });
+
+async function handleAutoScan() {
+    try {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (!tab || !tab.id) throw new Error("No active tab");
+
+        // get page dimensions
+        const [{ result: dimensions }] = await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => ({
+                scrollHeight: document.documentElement.scrollHeight,
+                clientHeight: document.documentElement.clientHeight,
+            })
+        });
+
+        const { scrollHeight, clientHeight } = dimensions;
+        const maxScroll = Math.max(0, scrollHeight - clientHeight);
+        let currentScroll = 0;
+
+        // Reset scroll position to top
+        await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            func: () => window.scrollTo(0, 0)
+        });
+        await new Promise(r => setTimeout(r, 500));
+
+        while (true) {
+            const screenshotUrl = await chrome.tabs.captureVisibleTab();
+            const progress = Math.min(100, Math.round(((currentScroll + clientHeight) / scrollHeight) * 100));
+            chrome.runtime.sendMessage({ type: "SCAN_FRAME", screenshotUrl, progress });
+
+            if (currentScroll >= maxScroll) {
+                break;
+            }
+
+            currentScroll += clientHeight;
+            if (currentScroll > maxScroll) currentScroll = maxScroll;
+
+            await chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                func: (y) => window.scrollTo(0, y),
+                args: [currentScroll]
+            });
+
+            await new Promise(r => setTimeout(r, 1000)); // wait for scroll to settle
+        }
+    } catch (e) {
+        console.error("Auto scan failed:", e);
+    }
+}
 
 /**
  * 解析リクエストのハンドラ
