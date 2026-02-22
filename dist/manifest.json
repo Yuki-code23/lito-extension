@@ -9,10 +9,21 @@
         "desktopCapture",
         "activeTab",
         "storage",
-        "offscreen"
+        "offscreen",
+        "identity"
     ],
+    "oauth2": {
+        "client_id": "351204538325-q1e048hqut3blqrpr33akh0eq2btg4sm.apps.googleusercontent.com",
+        "scopes": [
+            "email",
+            "profile"
+        ]
+    },
     "host_permissions": [
-        "https://*.crowdworks.jp/*"
+        "<all_urls>",
+        "https://*.crowdworks.jp/*",
+        "https://*.firebaseapp.com/*",
+        "https://*.googleapis.com/*"
     ],
     "background": {
         "service_worker": "background.js",
@@ -31,10 +42,5 @@
                 "mac": "Command+Shift+L"
             }
         }
-    },
-    "icons": {
-        "16": "icons/icon16.png",
-        "48": "icons/icon48.png",
-        "128": "icons/icon128.png"
     }
 }

@@ -4,7 +4,7 @@ import { getFirestore } from "firebase/firestore";
 
 // TODO: Replace with your actual Firebase project configuration
 const firebaseConfig = {
-    apiKey: "AIzaSyC3dc7VwrT_1D855o0FuGox68sNolUWxh4",
+    apiKey: "AIzaSyC3dc7VwrT_1D855o3FuGox68sNolUWxh4",
     authDomain: "lito-extension.firebaseapp.com",
     projectId: "lito-extension",
     storageBucket: "lito-extension.firebasestorage.app",

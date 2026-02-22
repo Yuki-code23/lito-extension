@@ -1,0 +1,46 @@
+{
+    "manifest_version": 3,
+    "name": "Lito - Real-time Vision AI Assistant",
+    "version": "1.0.0",
+    "description": "画面をリアルタイムで解析し、サイドバーからアドバイスをくれるAIパートナー Lito",
+    "permissions": [
+        "sidePanel",
+        "tabs",
+        "desktopCapture",
+        "activeTab",
+        "storage",
+        "offscreen",
+        "identity"
+    ],
+    "oauth2": {
+        "client_id": "351204538325-q1e048hqut3blqrpr33akh0eq2btg4sm.apps.googleusercontent.com",
+        "scopes": [
+            "email",
+            "profile"
+        ]
+    },
+    "host_permissions": [
+        "<all_urls>",
+        "https://*.crowdworks.jp/*",
+        "https://*.firebaseapp.com/*",
+        "https://*.googleapis.com/*"
+    ],
+    "background": {
+        "service_worker": "background.js",
+        "type": "module"
+    },
+    "side_panel": {
+        "default_path": "sidepanel.html"
+    },
+    "action": {
+        "default_title": "Litoを開く"
+    },
+    "commands": {
+        "_execute_action": {
+            "suggested_key": {
+                "default": "Ctrl+Shift+L",
+                "mac": "Command+Shift+L"
+            }
+        }
+    }
+}
