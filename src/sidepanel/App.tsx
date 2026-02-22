@@ -164,6 +164,8 @@ const App: React.FC = () => {
 
             if (response && response.success) {
                 setProposal(response.proposal);
+            } else {
+                alert(`応募文の生成に失敗しました: ${response?.error || '不明なエラー'}`);
             }
         } catch (error) {
             console.error("Failed to generate proposal:", error);

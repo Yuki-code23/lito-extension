@@ -132,7 +132,7 @@ ${skillsText}
  */
 export async function generateProposal(profile: Profile, analysisResults: any) {
     const apiKey = profile.geminiApiKey?.trim();
-    if (!apiKey) throw new Error("APIキーがありません");
+    if (!apiKey) throw new Error("APIキーが設定されていません。");
 
     const skillsText = profile.skills.map(s => `- ${s.name}: ${s.years}年`).join(', ');
     const prompt = `
@@ -155,12 +155,26 @@ export async function generateProposal(profile: Profile, analysisResults: any) {
         contents: [{ parts: [{ text: prompt }] }]
     };
 
-    // Reuse postToGemini helper
-    const response = await postToGeminiForNewFunctions("gemini-2.0-flash", apiKey, requestBody);
+    const modelsToTry = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
+    let lastError: any = null;
 
-    if (!response.ok) throw new Error("応募文の生成に失敗しました");
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "生成に失敗しました。";
+    for (const model of modelsToTry) {
+        try {
+            console.log(`Attempting proposal generation with ${model}...`);
+            const response = await postToGeminiForNewFunctions(model, apiKey, requestBody);
+            if (response.ok) {
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "応募文を生成できませんでした。";
+            }
+            const errorBody = await response.json().catch(() => ({}));
+            lastError = new Error(`APIエラー (${response.status}): ${errorBody.error?.message || '不明なエラー'}`);
+            if (response.status !== 404) break;
+        } catch (e) {
+            lastError = e;
+        }
+    }
+
+    throw lastError || new Error("応募文の生成に失敗しました。");
 }
 
 /**
@@ -168,7 +182,7 @@ export async function generateProposal(profile: Profile, analysisResults: any) {
  */
 export async function soliloquyChat(profile: Profile, message: string, context: any) {
     const apiKey = profile.geminiApiKey?.trim();
-    if (!apiKey) throw new Error("APIキーがありません");
+    if (!apiKey) throw new Error("APIキーが設定されていません。");
 
     const history = context.history?.slice(-5).map((m: any) => ({
         role: m.role === 'user' ? 'user' : 'model',
@@ -192,12 +206,26 @@ export async function soliloquyChat(profile: Profile, message: string, context: 
         ]
     };
 
-    // Reuse postToGemini helper
-    const response = await postToGeminiForNewFunctions("gemini-2.0-flash", apiKey, requestBody);
+    const modelsToTry = ["gemini-2.0-flash", "gemini-flash-latest", "gemini-1.5-flash"];
+    let lastError: any = null;
 
-    if (!response.ok) throw new Error("チャット回答の取得に失敗しました");
-    const data = await response.json();
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || "お答えできませんでした。";
+    for (const model of modelsToTry) {
+        try {
+            console.log(`Attempting chat with ${model}...`);
+            const response = await postToGeminiForNewFunctions(model, apiKey, requestBody);
+            if (response.ok) {
+                const data = await response.json();
+                return data.candidates?.[0]?.content?.parts?.[0]?.text || "お答えできませんでした。";
+            }
+            const errorBody = await response.json().catch(() => ({}));
+            lastError = new Error(`APIエラー (${response.status}): ${errorBody.error?.message || '不明なエラー'}`);
+            if (response.status !== 404) break;
+        } catch (e) {
+            lastError = e;
+        }
+    }
+
+    throw lastError || new Error("チャット回答の取得に失敗しました。");
 }
 
 /**
