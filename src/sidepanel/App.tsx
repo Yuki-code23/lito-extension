@@ -199,8 +199,13 @@ const App: React.FC = () => {
             console.log("Starting speech recognition...");
             try {
                 recognition.start();
-            } catch (e) {
+            } catch (e: any) {
                 console.error("Failed to start speech recognition:", e);
+                if (e.name === 'NotAllowedError' || e.message?.includes('permission')) {
+                    alert("マイクの使用が許可されていません。ブラウザの設定でマイクを許可するか、一度別のタブでマイク許可を有効にする必要があります。");
+                } else {
+                    alert(`音声認識の開始に失敗しました: ${e.message}`);
+                }
                 setIsListening(false);
             }
         }
