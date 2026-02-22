@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { Settings, LogOut, Check, Pencil, Plus, X, MessageSquare, Send, FileText } from 'lucide-react';
+import { Settings, LogOut, Check, Pencil, Plus, X, MessageSquare, Send, FileText, Mic, MicOff, Volume2 } from 'lucide-react';
 
 interface Skill {
     id: string;
@@ -46,8 +46,29 @@ const App: React.FC = () => {
     const [chatInput, setChatInput] = useState('');
     const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
     const [isChatting, setIsChatting] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [recognition, setRecognition] = useState<any>(null);
 
     useEffect(() => {
+        // SpeechRecognitionの初期化
+        const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+        if (SpeechRecognition) {
+            const rec = new SpeechRecognition();
+            rec.lang = 'ja-JP';
+            rec.continuous = false;
+            rec.interimResults = false;
+
+            rec.onstart = () => setIsListening(true);
+            rec.onend = () => setIsListening(false);
+            rec.onresult = (event: any) => {
+                const transcript = event.results[0][0].transcript;
+                if (transcript) {
+                    handleVoiceSubmit(transcript);
+                }
+            };
+            setRecognition(rec);
+        }
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             setUser(currentUser);
             if (currentUser) {
@@ -152,6 +173,50 @@ const App: React.FC = () => {
         }
     };
 
+    const handleToggleMic = () => {
+        if (!recognition) {
+            alert("このブラウザは音声認識に対応していません。");
+            return;
+        }
+        if (isListening) {
+            recognition.stop();
+        } else {
+            recognition.start();
+        }
+    };
+
+    const handleVoiceSubmit = async (text: string) => {
+        setChatMessages(prev => [...prev, { role: 'user', text }]);
+        setIsChatting(true);
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "SOLILOQUY_CHAT",
+                profile: { ...preferences, skills },
+                message: text,
+                context: { analysisResults, proposal, history: chatMessages }
+            });
+
+            if (response && response.success) {
+                setChatMessages(prev => [...prev, { role: 'assistant', text: response.reply }]);
+                speakOut(response.reply);
+            }
+        } catch (error) {
+            console.error("Voice Chat failed:", error);
+        } finally {
+            setIsChatting(false);
+        }
+    };
+
+    const speakOut = (text: string) => {
+        if (!window.speechSynthesis) return;
+        // 既存の再生をキャンセル
+        window.speechSynthesis.cancel();
+        const uttr = new SpeechSynthesisUtterance(text);
+        uttr.lang = 'ja-JP';
+        uttr.rate = 1.1; // 少し速めに
+        window.speechSynthesis.speak(uttr);
+    };
+
     const handleGenerateProposal = async () => {
         if (!analysisResults) return;
         setIsGeneratingProposal(true);
@@ -192,6 +257,7 @@ const App: React.FC = () => {
 
             if (response && response.success) {
                 setChatMessages(prev => [...prev, { role: 'assistant', text: response.reply }]);
+                speakOut(response.reply);
             }
         } catch (error) {
             console.error("Chat failed:", error);
@@ -583,17 +649,33 @@ const App: React.FC = () => {
                                 </div>
 
                                 <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={chatInput}
-                                        onChange={(e) => setChatInput(e.target.value)}
-                                        onKeyPress={(e) => e.key === 'Enter' && handleSendChatMessage()}
-                                        placeholder="独り言を送信..."
-                                        className="flex-1 text-xs p-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-                                    />
+                                    <div className="relative flex-1">
+                                        <input
+                                            type="text"
+                                            value={chatInput}
+                                            onChange={(e) => setChatInput(e.target.value)}
+                                            onKeyPress={(e) => e.key === 'Enter' && handleSendChatMessage()}
+                                            placeholder={isListening ? "聞き取り中..." : "独り言を送信..."}
+                                            className={`w-full text-xs p-3 pr-10 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all ${isListening ? 'border-red-300 ring-1 ring-red-100' : ''}`}
+                                        />
+                                        {isListening && (
+                                            <div className="absolute right-3 top-1/2 -translate-y-1/2 flex gap-0.5">
+                                                <div className="w-1 h-3 bg-red-400 rounded-full animate-bounce"></div>
+                                                <div className="w-1 h-4 bg-red-400 rounded-full animate-bounce [animation-delay:0.2s]"></div>
+                                                <div className="w-1 h-3 bg-red-400 rounded-full animate-bounce [animation-delay:0.4s]"></div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <button
+                                        onClick={handleToggleMic}
+                                        className={`p-3 rounded-xl shadow-md transition-all flex items-center justify-center aspect-square ${isListening ? 'bg-red-500 text-white animate-pulse' : 'bg-gray-100 text-gray-500 hover:bg-gray-200'}`}
+                                        title={isListening ? "停止" : "音声入力"}
+                                    >
+                                        {isListening ? <MicOff size={18} /> : <Mic size={18} />}
+                                    </button>
                                     <button
                                         onClick={handleSendChatMessage}
-                                        disabled={!chatInput.trim() || isChatting}
+                                        disabled={!chatInput.trim() || isChatting || isListening}
                                         className="p-3 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-100 hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center aspect-square"
                                     >
                                         <Send size={18} className={isChatting ? 'animate-spin' : ''} />
