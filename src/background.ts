@@ -158,7 +158,8 @@ async function handleAutoScan() {
             })
         });
 
-        const { scrollHeight, clientHeight } = dimensions;
+        const { scrollHeight, clientHeight } = dimensions || { scrollHeight: 0, clientHeight: 0 };
+        if (scrollHeight === 0) throw new Error("Could not determine page dimensions");
         const maxScroll = Math.max(0, scrollHeight - clientHeight);
         let currentScroll = 0;
 
