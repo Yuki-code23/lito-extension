@@ -2,7 +2,15 @@ import React, { useEffect, useState } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { auth, db } from '../firebase/config';
 import { doc, getDoc, updateDoc } from 'firebase/firestore';
-import { Settings, LogOut, Check, Pencil, Plus, X } from 'lucide-react';
+import { Settings, LogOut, Check, Pencil, Plus, X, MessageSquare, Send, FileText } from 'lucide-react';
+
+interface Skill {
+    id: string;
+    name: string;
+    years: number;
+    isProfessional: boolean;
+    level: number;
+}
 
 interface Preferences {
     targetRate: number;
@@ -16,7 +24,7 @@ const App: React.FC = () => {
 
     // User Data State
     const [preferences, setPreferences] = useState<Preferences>({ targetRate: 0, category: '', geminiApiKey: '' });
-    const [skills, setSkills] = useState<string[]>([]);
+    const [skills, setSkills] = useState<Skill[]>([]);
 
     // Editing States
     const [isEditingPrefs, setIsEditingPrefs] = useState(false);
@@ -24,11 +32,20 @@ const App: React.FC = () => {
     const [editCategory, setEditCategory] = useState('');
     const [editGeminiKey, setEditGeminiKey] = useState('');
 
-    const [newSkill, setNewSkill] = useState('');
+    const [isAddingSkill, setIsAddingSkill] = useState(false);
+    const [newSkillName, setNewSkillName] = useState('');
+    const [newSkillYears, setNewSkillYears] = useState('1');
+    const [newSkillIsPro, setNewSkillIsPro] = useState(true);
+    const [newSkillLevel, setNewSkillLevel] = useState(3);
 
-    // Analysis State
+    // Analysis & Chat State
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisResults, setAnalysisResults] = useState<{ suggestions: string[] } | null>(null);
+    const [isGeneratingProposal, setIsGeneratingProposal] = useState(false);
+    const [proposal, setProposal] = useState<string | null>(null);
+    const [chatInput, setChatInput] = useState('');
+    const [chatMessages, setChatMessages] = useState<{ role: 'user' | 'assistant', text: string }[]>([]);
+    const [isChatting, setIsChatting] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -76,22 +93,31 @@ const App: React.FC = () => {
 
     const handleAddSkill = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!newSkill.trim() || !user || skills.includes(newSkill.trim())) return;
+        if (!newSkillName.trim() || !user) return;
 
-        const updatedSkills = [...skills, newSkill.trim()];
+        const skill: Skill = {
+            id: Date.now().toString(),
+            name: newSkillName.trim(),
+            years: parseFloat(newSkillYears) || 0,
+            isProfessional: newSkillIsPro,
+            level: newSkillLevel
+        };
+
+        const updatedSkills = [...skills, skill];
         try {
             const userRef = doc(db, 'users', user.uid);
             await updateDoc(userRef, { skills: updatedSkills });
             setSkills(updatedSkills);
-            setNewSkill('');
+            setNewSkillName('');
+            setIsAddingSkill(false);
         } catch (error) {
             console.error("Error adding skill:", error);
         }
     };
 
-    const handleRemoveSkill = async (skillToRemove: string) => {
+    const handleRemoveSkill = async (skillId: string) => {
         if (!user) return;
-        const updatedSkills = skills.filter(s => s !== skillToRemove);
+        const updatedSkills = skills.filter(s => s.id !== skillId);
         try {
             const userRef = doc(db, 'users', user.uid);
             await updateDoc(userRef, { skills: updatedSkills });
@@ -104,6 +130,8 @@ const App: React.FC = () => {
     const handleStartAnalysis = async () => {
         setIsAnalyzing(true);
         setAnalysisResults(null);
+        setProposal(null);
+        setChatMessages([]);
 
         try {
             // Backgroundスクリプトに解析を依頼
@@ -121,6 +149,53 @@ const App: React.FC = () => {
             console.error("Failed to send message to background:", error);
         } finally {
             setIsAnalyzing(false);
+        }
+    };
+
+    const handleGenerateProposal = async () => {
+        if (!analysisResults) return;
+        setIsGeneratingProposal(true);
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "GENERATE_PROPOSAL",
+                profile: { ...preferences, skills },
+                analysisResults
+            });
+
+            if (response && response.success) {
+                setProposal(response.proposal);
+            }
+        } catch (error) {
+            console.error("Failed to generate proposal:", error);
+        } finally {
+            setIsGeneratingProposal(false);
+        }
+    };
+
+    const handleSendChatMessage = async () => {
+        if (!chatInput.trim() || isChatting) return;
+
+        const userMsg = chatInput.trim();
+        setChatInput('');
+        setChatMessages(prev => [...prev, { role: 'user', text: userMsg }]);
+        setIsChatting(true);
+
+        try {
+            const response = await chrome.runtime.sendMessage({
+                type: "SOLILOQUY_CHAT",
+                profile: { ...preferences, skills },
+                message: userMsg,
+                context: { analysisResults, proposal, history: chatMessages }
+            });
+
+            if (response && response.success) {
+                setChatMessages(prev => [...prev, { role: 'assistant', text: response.reply }]);
+            }
+        } catch (error) {
+            console.error("Chat failed:", error);
+            setChatMessages(prev => [...prev, { role: 'assistant', text: "すみません、対話中にエラーが発生しました。" }]);
+        } finally {
+            setIsChatting(false);
         }
     };
 
@@ -282,46 +357,113 @@ const App: React.FC = () => {
                 <section>
                     <div className="flex justify-between items-center mb-3 px-1">
                         <h2 className="text-base font-bold text-gray-800 border-b-[3px] border-blue-500 pb-1 inline-block">保有スキル</h2>
-                        <span className="text-xs font-bold bg-gray-200 text-gray-700 py-0.5 px-2.5 rounded-full">{skills.length}</span>
+                        <button
+                            onClick={() => setIsAddingSkill(!isAddingSkill)}
+                            className="p-1 text-blue-600 hover:bg-blue-50 rounded-full transition-colors"
+                        >
+                            {isAddingSkill ? <X size={20} /> : <Plus size={20} />}
+                        </button>
                     </div>
 
-                    <form onSubmit={handleAddSkill} className="flex gap-2 mb-4 relative">
-                        <input
-                            type="text"
-                            value={newSkill}
-                            onChange={(e) => setNewSkill(e.target.value)}
-                            placeholder="スキルを追加 (例: React)"
-                            className="flex-1 text-sm p-2.5 bg-white border border-gray-200 rounded-lg shadow-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pl-3 pr-10"
-                        />
-                        <button
-                            type="submit"
-                            disabled={!newSkill.trim()}
-                            className="absolute right-1 top-1 bottom-1 p-2 text-blue-600 bg-blue-50 rounded-md hover:bg-blue-100 disabled:opacity-50 disabled:hover:bg-transparent disabled:text-gray-400 transition-colors flex items-center justify-center"
-                        >
-                            <Plus size={18} strokeWidth={2.5} />
-                        </button>
-                    </form>
+                    {isAddingSkill && (
+                        <form onSubmit={handleAddSkill} className="mb-6 bg-white p-4 rounded-xl border border-blue-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                            <div>
+                                <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">スキル名</label>
+                                <input
+                                    type="text"
+                                    value={newSkillName}
+                                    onChange={(e) => setNewSkillName(e.target.value)}
+                                    placeholder="例: React, TypeScript"
+                                    className="w-full text-sm p-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">経験年数</label>
+                                    <input
+                                        type="number"
+                                        step="0.5"
+                                        value={newSkillYears}
+                                        onChange={(e) => setNewSkillYears(e.target.value)}
+                                        className="w-full text-sm p-2 bg-gray-50 border border-gray-200 rounded-lg"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">熟練度 (1-5)</label>
+                                    <select
+                                        value={newSkillLevel}
+                                        onChange={(e) => setNewSkillLevel(parseInt(e.target.value))}
+                                        className="w-full text-sm p-2 bg-gray-50 border border-gray-200 rounded-lg"
+                                    >
+                                        <option value={1}>1: 基礎レベル</option>
+                                        <option value={2}>2: 独力で可能</option>
+                                        <option value={3}>3: 実務経験あり</option>
+                                        <option value={4}>4: 専門知識あり</option>
+                                        <option value={5}>5: エキスパート</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input
+                                    type="checkbox"
+                                    id="isPro"
+                                    checked={newSkillIsPro}
+                                    onChange={(e) => setNewSkillIsPro(e.target.checked)}
+                                    className="rounded text-blue-600 focus:ring-blue-500"
+                                />
+                                <label htmlFor="isPro" className="text-xs font-medium text-gray-600">実務経験としてカウントする</label>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={!newSkillName.trim()}
+                                className="w-full py-2.5 bg-blue-600 text-white text-xs font-bold rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-all shadow-md shadow-blue-100"
+                            >
+                                スキルを保存
+                            </button>
+                        </form>
+                    )}
 
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-col gap-3">
                         {skills.length === 0 ? (
-                            <div className="text-sm text-gray-500 font-medium p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg w-full text-center">
+                            <div className="text-sm text-gray-500 font-medium p-6 bg-gray-50 border border-dashed border-gray-300 rounded-xl w-full text-center">
                                 スキルを登録してAIの精度を高めましょう
                             </div>
                         ) : (
                             skills.map(skill => (
-                                <span
-                                    key={skill}
-                                    className="group flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 border border-blue-100 text-blue-800 text-xs font-semibold rounded-lg shadow-sm transition-all"
+                                <div
+                                    key={skill.id}
+                                    className="group flex flex-col p-3 bg-white border border-gray-100 rounded-xl shadow-sm transition-all hover:border-blue-200 hover:shadow-md"
                                 >
-                                    {skill}
-                                    <button
-                                        onClick={() => handleRemoveSkill(skill)}
-                                        className="text-blue-400 hover:text-red-500 hover:bg-red-50 rounded-full p-0.5 transition-colors focus:outline-none"
-                                        aria-label="削除"
-                                    >
-                                        <X size={12} strokeWidth={2.5} />
-                                    </button>
-                                </span>
+                                    <div className="flex justify-between items-start mb-2">
+                                        <div>
+                                            <span className="text-sm font-bold text-gray-800">{skill.name}</span>
+                                            {skill.isProfessional && (
+                                                <span className="ml-2 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold uppercase">Pro</span>
+                                            )}
+                                        </div>
+                                        <button
+                                            onClick={() => handleRemoveSkill(skill.id)}
+                                            className="text-gray-300 hover:text-red-500 transition-colors p-1"
+                                        >
+                                            <X size={14} />
+                                        </button>
+                                    </div>
+                                    <div className="flex items-center gap-4">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] text-gray-400 font-bold uppercase">経験</span>
+                                            <span className="text-xs font-semibold text-gray-600">{skill.years}年</span>
+                                        </div>
+                                        <div className="flex flex-col flex-1">
+                                            <span className="text-[10px] text-gray-400 font-bold uppercase mb-1">レベル: {skill.level}</span>
+                                            <div className="flex gap-0.5">
+                                                {[1, 2, 3, 4, 5].map(i => (
+                                                    <div key={i} className={`h-1 flex-1 rounded-full ${i <= skill.level ? 'bg-blue-500' : 'bg-gray-100'}`}></div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             ))
                         )}
                     </div>
@@ -363,6 +505,99 @@ const App: React.FC = () => {
                                 <Settings className={`${isAnalyzing ? 'animate-spin' : ''}`} size={16} />
                                 再解析を実行
                             </button>
+
+                            {/* 応募文生成ボタン */}
+                            {!proposal && (
+                                <button
+                                    onClick={handleGenerateProposal}
+                                    disabled={isGeneratingProposal}
+                                    className="w-full mt-2 py-3 px-4 bg-green-600 text-white text-sm font-bold rounded-xl hover:bg-green-700 transition-all flex items-center justify-center gap-2 shadow-md shadow-green-100 disabled:opacity-50"
+                                >
+                                    {isGeneratingProposal ? (
+                                        <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                    ) : (
+                                        <FileText size={16} />
+                                    )}
+                                    案件の応募文を生成
+                                </button>
+                            )}
+
+                            {proposal && (
+                                <div className="mt-4 bg-white border border-green-200 rounded-xl overflow-hidden shadow-sm animate-in zoom-in-95 duration-200">
+                                    <div className="bg-green-50 px-4 py-2 border-b border-green-100 flex justify-between items-center">
+                                        <span className="text-[10px] font-bold text-green-700 uppercase tracking-widest">生成された応募文</span>
+                                        <button
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(proposal);
+                                                alert("コピーしました！");
+                                            }}
+                                            className="text-[10px] bg-white text-green-600 px-2 py-1 rounded border border-green-200 font-bold hover:bg-green-100 transition-colors"
+                                        >
+                                            コピー
+                                        </button>
+                                    </div>
+                                    <div className="p-4">
+                                        <textarea
+                                            readOnly
+                                            value={proposal}
+                                            className="w-full h-40 text-xs text-gray-700 leading-relaxed border-none focus:ring-0 resize-none bg-transparent"
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* 独り言チャットセクション */}
+                            <div className="mt-6 border-t border-gray-100 pt-6">
+                                <h3 className="text-sm font-extrabold text-gray-800 mb-4 flex items-center gap-2">
+                                    <MessageSquare size={18} className="text-blue-500" />
+                                    Litoと対話する（独り言）
+                                </h3>
+
+                                <div className="space-y-4 mb-4 max-h-60 overflow-y-auto pr-2 scrollbar-thin">
+                                    {chatMessages.length === 0 && (
+                                        <div className="text-[11px] text-gray-400 italic text-center py-4">
+                                            「この案件、今のレベルで大丈夫かな？」など、<br />気になることを聞いてみてください。
+                                        </div>
+                                    )}
+                                    {chatMessages.map((msg, i) => (
+                                        <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                                            <div className={`max-w-[85%] p-3 rounded-2xl text-[12px] leading-relaxed shadow-sm ${msg.role === 'user'
+                                                ? 'bg-blue-600 text-white rounded-tr-none'
+                                                : 'bg-white border border-gray-100 text-gray-700 rounded-tl-none'
+                                                }`}>
+                                                {msg.text}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {isChatting && (
+                                        <div className="flex justify-start">
+                                            <div className="bg-white border border-gray-100 p-3 rounded-2xl rounded-tl-none shadow-sm flex gap-1">
+                                                <div className="w-1 h-1 bg-gray-300 rounded-full animate-bounce"></div>
+                                                <div className="w-1 h-1 bg-gray-300 rounded-full animate-bounce delay-75"></div>
+                                                <div className="w-1 h-1 bg-gray-300 rounded-full animate-bounce delay-150"></div>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={chatInput}
+                                        onChange={(e) => setChatInput(e.target.value)}
+                                        onKeyPress={(e) => e.key === 'Enter' && handleSendChatMessage()}
+                                        placeholder="独り言を送信..."
+                                        className="flex-1 text-xs p-3 bg-white border border-gray-200 rounded-xl shadow-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                    />
+                                    <button
+                                        onClick={handleSendChatMessage}
+                                        disabled={!chatInput.trim() || isChatting}
+                                        className="p-3 bg-blue-600 text-white rounded-xl shadow-md shadow-blue-100 hover:bg-blue-700 disabled:opacity-50 transition-all flex items-center justify-center aspect-square"
+                                    >
+                                        <Send size={18} className={isChatting ? 'animate-spin' : ''} />
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     ) : (
                         <div className="text-center">

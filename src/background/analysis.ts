@@ -1,7 +1,22 @@
+export interface Skill {
+    id: string;
+    name: string;
+    years: number;
+    isProfessional: boolean;
+    level: number;
+}
+
+export interface Profile {
+    targetRate: number;
+    category: string;
+    skills: Skill[];
+    geminiApiKey?: string;
+}
+
 /**
  * ページ内容の画像とユーザープロファイルに基づいて解析を実行する
  */
-export async function analyzePage(screenshotUrl: string, profile: { targetRate: number; category: string; skills: string[]; geminiApiKey?: string }) {
+export async function analyzePage(screenshotUrl: string, profile: Profile) {
     console.log("Analyzing page with Gemini Vision API...");
 
     const apiKey = profile.geminiApiKey?.trim();
@@ -9,8 +24,20 @@ export async function analyzePage(screenshotUrl: string, profile: { targetRate: 
         throw new Error("Gemini APIキーが設定されていません。");
     }
 
+    const skillsText = profile.skills.map(s => `- ${s.name}: ${s.years}年 (Lv.${s.level}${s.isProfessional ? ', 実務あり' : ''})`).join('\n');
     const base64Data = screenshotUrl.split(',')[1];
-    const prompt = `あなたはフリーランスエンジニアの強力なエージェント「Lito」です。提供されたスクリーンショットの案件詳細を解析し、ユーザーのプロフィール（目標：${profile.targetRate}、職種：${profile.category}、スキル：${profile.skills.join(', ')}）に合わせたアドバイスを3つ簡潔に回答してください。`;
+    const prompt = `
+あなたはフリーランスエンジニアの強力なエージェント「Lito」です。提供されたスクリーンショットの案件詳細を解析してください。
+
+ユーザープロフィール：
+- 希望単価：月${profile.targetRate.toLocaleString()}円
+- 職種：${profile.category}
+- スキル：
+${skillsText}
+
+上記プロフィールに合わせたアドバイスを3つ、具体的かつ簡潔に回答してください。
+回答形式：3つの箇条書き（改行区切り）
+`;
 
     const requestBody = {
         contents: [{
@@ -98,4 +125,90 @@ export async function analyzePage(screenshotUrl: string, profile: { targetRate: 
         console.error("Analysis execution failed:", error);
         throw error;
     }
+}
+
+/**
+ * 案件に基づいた応募文（提案文）を生成する
+ */
+export async function generateProposal(profile: Profile, analysisResults: any) {
+    const apiKey = profile.geminiApiKey?.trim();
+    if (!apiKey) throw new Error("APIキーがありません");
+
+    const skillsText = profile.skills.map(s => `- ${s.name}: ${s.years}年`).join(', ');
+    const prompt = `
+あなたはユーザーの代理人エンジニアです。以下の案件解析結果とスキルに基づき、クライアントに送る「応募文（提案文）」を作成してください。
+文体は丁寧ですが、プロフェッショナルな自信を感じさせるものにしてください。
+
+ユーザーのスキル：${skillsText}
+案件解析のポイント：${analysisResults.suggestions.join(' / ')}
+
+構成：
+1. 挨拶
+2. 案件への関心と適合する理由
+3. 具体的な貢献内容
+4. 結びの言葉
+
+返信は「応募文の本文のみ」を出力してください。
+`;
+
+    const requestBody = {
+        contents: [{ parts: [{ text: prompt }] }]
+    };
+
+    // Reuse postToGemini helper
+    const response = await postToGeminiForNewFunctions("gemini-2.0-flash", apiKey, requestBody);
+
+    if (!response.ok) throw new Error("応募文の生成に失敗しました");
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "生成に失敗しました。";
+}
+
+/**
+ * ユーザーの「独り言」に対する対話を行う
+ */
+export async function soliloquyChat(profile: Profile, message: string, context: any) {
+    const apiKey = profile.geminiApiKey?.trim();
+    if (!apiKey) throw new Error("APIキーがありません");
+
+    const history = context.history?.slice(-5).map((m: any) => ({
+        role: m.role === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+    })) || [];
+
+    const systemPrompt = `
+あなたはフリーランスエンジニアのエージェント「Lito」です。
+ユーザーは案件ページを見ながら、あなたに「独り言」のように不安や質問を投げかけています。
+前回の解析結果（${context.analysisResults?.suggestions.join('、')}）を踏まえ、
+ユーザーを励ましつつ、エンジニアとしての客観的な視点でアドバイスを返してください。
+回答は親しみやすく、かつ短く（150文字以内）まとめてください。
+`;
+
+    const requestBody = {
+        contents: [
+            { role: 'user', parts: [{ text: systemPrompt }] },
+            { role: 'model', parts: [{ text: "了解しました。エージェントLitoとして、解析結果に基づきアドバイスします。" }] },
+            ...history,
+            { role: 'user', parts: [{ text: message }] }
+        ]
+    };
+
+    // Reuse postToGemini helper
+    const response = await postToGeminiForNewFunctions("gemini-2.0-flash", apiKey, requestBody);
+
+    if (!response.ok) throw new Error("チャット回答の取得に失敗しました");
+    const data = await response.json();
+    return data.candidates?.[0]?.content?.parts?.[0]?.text || "お答えできませんでした。";
+}
+
+/**
+ * Gemini APIにPOSTするための汎用ヘルパー関数
+ * analyzePage内のpostToGeminiとは異なり、apiKeyとbodyを引数で受け取る
+ */
+async function postToGeminiForNewFunctions(modelName: string, apiKey: string, body: any) {
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`;
+    return fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body)
+    });
 }

@@ -2,7 +2,7 @@ import { auth, db } from "./firebase/config";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore";
 import { GoogleAuthProvider, signInWithCredential } from "firebase/auth";
-import { analyzePage } from "./background/analysis";
+import { analyzePage, generateProposal, soliloquyChat } from "./background/analysis";
 
 /**
  * ログイン処理を開始する (Google Identity APIを使用)
@@ -96,6 +96,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         startLogin().then(() => sendResponse({ success: true })).catch(err => sendResponse({ success: false, error: err.message }));
         return true;
     }
+    if (message.type === "GENERATE_PROPOSAL") {
+        handleProposalRequest(message.profile, message.analysisResults).then(sendResponse);
+        return true;
+    }
+    if (message.type === "SOLILOQUY_CHAT") {
+        handleChatRequest(message.profile, message.message, message.context).then(sendResponse);
+        return true;
+    }
 });
 
 /**
@@ -121,6 +129,30 @@ async function handleAnalysisRequest(profile: any) {
         return { success: true, results };
     } catch (error: any) {
         console.error("Analysis handler failed:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * 応募文生成リクエストのハンドラ
+ */
+async function handleProposalRequest(profile: any, analysisResults: any) {
+    try {
+        const proposal = await generateProposal(profile, analysisResults);
+        return { success: true, proposal };
+    } catch (error: any) {
+        return { success: false, error: error.message };
+    }
+}
+
+/**
+ * 独り言チャットリクエストのハンドラ
+ */
+async function handleChatRequest(profile: any, message: string, context: any) {
+    try {
+        const reply = await soliloquyChat(profile, message, context);
+        return { success: true, reply };
+    } catch (error: any) {
         return { success: false, error: error.message };
     }
 }
