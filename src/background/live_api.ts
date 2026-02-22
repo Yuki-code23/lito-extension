@@ -45,12 +45,12 @@ export class MultimodalLiveClient {
             };
 
             this.ws.onerror = (error) => {
-                console.error("WebSocket error:", error);
+                console.error("WebSocket error details:", error);
                 reject(error);
             };
 
-            this.ws.onclose = () => {
-                console.log("WebSocket closed");
+            this.ws.onclose = (event) => {
+                console.log(`WebSocket closed: Code=${event.code}, Reason=${event.reason}, WasClean=${event.wasClean}`);
             };
         });
     }
