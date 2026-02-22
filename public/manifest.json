@@ -45,6 +45,6 @@
         }
     },
     "content_security_policy": {
-        "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://*.googleapis.com wss://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://*.crowdworks.jp"
+        "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'self' https://* wss://*"
     }
 }

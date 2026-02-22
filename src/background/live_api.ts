@@ -15,7 +15,7 @@ export class MultimodalLiveClient {
 
     constructor(config: LiveConfig, onMessage: (msg: any) => void) {
         this.config = config;
-        this.config.model = this.config.model || "gemini-2.0-flash-exp"; // "models/" プレフィックスなしを試す
+        this.config.model = this.config.model || "gemini-2.0-flash"; // より安定しているモデル名に変更
         this.onMessageCallback = onMessage;
     }
 
@@ -24,7 +24,7 @@ export class MultimodalLiveClient {
             this.ws.close();
         }
 
-        const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.MultimodalLive?key=${this.config.apiKey}`;
+        const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.MultimodalLive?key=${this.config.apiKey}`;
 
         return new Promise<void>((resolve, reject) => {
             this.ws = new WebSocket(url);
