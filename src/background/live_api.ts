@@ -26,7 +26,6 @@ export class MultimodalLiveClient {
         }
 
         const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.config.apiKey}`;
-
         return new Promise<void>((resolve, reject) => {
             this.ws = new WebSocket(url);
 
@@ -60,7 +59,7 @@ export class MultimodalLiveClient {
     private sendSetup() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-        const setupMsg: any = {
+        const setupMsg = {
             setup: {
                 model: this.config.model,
                 generationConfig: {
@@ -68,13 +67,6 @@ export class MultimodalLiveClient {
                 }
             }
         };
-
-        if (this.config.systemInstruction) {
-            setupMsg.setup.systemInstruction = {
-                parts: [{ text: this.config.systemInstruction }]
-            };
-        }
-
         this.ws.send(JSON.stringify(setupMsg));
     }
 
