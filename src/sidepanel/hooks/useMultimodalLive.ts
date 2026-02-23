@@ -33,7 +33,11 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
 
         const client = new MultimodalLiveClient({
             apiKey,
-            systemInstruction
+            systemInstruction,
+            onDisconnect: (reason) => {
+                console.warn("Live API Disconnected:", reason);
+                stopLive();
+            }
         }, onMessage);
 
         try {

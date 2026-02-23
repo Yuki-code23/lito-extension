@@ -6,6 +6,7 @@ export interface LiveConfig {
     apiKey: string;
     model?: string;
     systemInstruction?: string;
+    onDisconnect?: (reason: string) => void;
 }
 
 export class MultimodalLiveClient {
@@ -24,7 +25,7 @@ export class MultimodalLiveClient {
             this.ws.close();
         }
 
-        const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${this.config.apiKey}`;
+        const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${this.config.apiKey}`;
 
         return new Promise<void>((resolve, reject) => {
             this.ws = new WebSocket(url);
@@ -45,12 +46,13 @@ export class MultimodalLiveClient {
             };
 
             this.ws.onerror = (error) => {
-                console.error("WebSocket error details:", error);
-                reject(error);
+                console.error("Live API WebSocket Error:", error);
+                if (this.config.onDisconnect) this.config.onDisconnect("WebSocket Error");
             };
 
             this.ws.onclose = (event) => {
-                console.log(`WebSocket closed: Code=${event.code}, Reason=${event.reason}, WasClean=${event.wasClean}`);
+                console.log(`Live API WebSocket Connection Closed: Code=${event.code}, Reason=${event.reason || 'Unknown'}`);
+                if (this.config.onDisconnect) this.config.onDisconnect(`Code: ${event.code}, Reason: ${event.reason}`);
             };
         });
     }
@@ -62,7 +64,7 @@ export class MultimodalLiveClient {
             setup: {
                 model: this.config.model,
                 generationConfig: {
-                    responseModalities: ["text"]
+                    responseModalities: ["TEXT"]
                 }
             }
         };
