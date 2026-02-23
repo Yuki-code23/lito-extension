@@ -59,7 +59,7 @@ export class MultimodalLiveClient {
     private sendSetup() {
         if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
 
-        const setupMsg = {
+        const setupMsg: any = {
             setup: {
                 model: this.config.model,
                 generationConfig: {
@@ -67,6 +67,13 @@ export class MultimodalLiveClient {
                 }
             }
         };
+
+        if (this.config.systemInstruction) {
+            setupMsg.setup.systemInstruction = {
+                parts: [{ text: this.config.systemInstruction }]
+            };
+        }
+
         this.ws.send(JSON.stringify(setupMsg));
     }
 
