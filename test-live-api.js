@@ -3,13 +3,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const API_KEY = process.env.VITE_FIREBASE_API_KEY;
+const API_KEY = process.env.VITE_GEMINI_API_KEY;
 if (!API_KEY) {
     console.error("API key not found in .env");
     process.exit(1);
 }
 
-const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${API_KEY}`;
+const url = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${API_KEY}`;
 console.log("Connecting to:", url.substring(0, 80) + "...");
 
 const ws = new WebSocket(url);
@@ -20,12 +20,26 @@ ws.on('open', () => {
         setup: {
             model: "models/gemini-2.0-flash-exp",
             generationConfig: {
-                responseModalities: ["text"]
+                responseModalities: ["TEXT"]
             }
         }
     };
     ws.send(JSON.stringify(setupMsg));
     console.log("Sent setup message");
+
+    setTimeout(() => {
+        const textMsg = {
+            clientContent: {
+                turns: [{
+                    role: "user",
+                    parts: [{ text: "こんにちは。何か返事をしてください。" }]
+                }],
+                turnComplete: true
+            }
+        };
+        ws.send(JSON.stringify(textMsg));
+        console.log("Sent text trigger message");
+    }, 2000);
 });
 
 ws.on('message', (data) => {

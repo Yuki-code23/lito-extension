@@ -33,6 +33,7 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
 
         const client = new MultimodalLiveClient({
             apiKey,
+            model: "models/gemini-2.0-flash",
             systemInstruction,
             onDisconnect: (reason) => {
                 console.warn("Live API Disconnected:", reason);
@@ -88,6 +89,7 @@ export const useMultimodalLive = (apiKey: string | undefined, systemInstruction:
 
         const client = new MultimodalLiveClient({
             apiKey,
+            model: "models/gemini-2.0-flash",
             systemInstruction
         }, onMessage);
 

@@ -16,7 +16,7 @@ export class MultimodalLiveClient {
 
     constructor(config: LiveConfig, onMessage: (msg: any) => void) {
         this.config = config;
-        this.config.model = this.config.model || "models/gemini-2.0-flash-exp";
+        this.config.model = this.config.model || "models/gemini-2.0-flash";
         this.onMessageCallback = onMessage;
     }
 
